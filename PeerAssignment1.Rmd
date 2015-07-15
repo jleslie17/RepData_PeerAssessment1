@@ -1,0 +1,126 @@
+Peer Assignment 1
+====================
+
+This assignment describes data collected from personal activity monitoring devices.
+
+#Loading and preprocessing data
+Begin by loading the data and changing the steps variable to a number.
+```{r}
+activity <- read.csv("activity.csv", header = T)
+activity$steps <- as.numeric(activity$steps)
+```
+
+#Calculating the mean number of steps taken per day and producing a histogram
+The first calculation and plot are to used to determine the mean total 
+number of steps take per day. I used the ggplot2 package for the plotting 
+and the dplyer package for processing the data.
+```{r}
+library(ggplot2)
+library(dplyr)
+activityDF <- activity %>%
+        group_by(date) %>%
+        summarize(dateSums = sum(steps))
+g <- ggplot(activityDF, aes(x = dateSums))
+p <- g + geom_histogram(binwidth = 2500, fill = "white", colour = "black") +
+        labs(title = "Distribution of daily actiities", x = "steps per day")
+print(p)
+mean(activityDF$dateSums, na.rm = T)
+median(activityDF$dateSums, na.rm = T)
+```
+
+#Determining the average daily activity pattern
+The second calculation is to examine the average daily activity pattern. 
+To do this, I made a data table in which the number of steps was calculated
+as a function of the time interval, averaged across all days. This was displayed
+with a line graph. I also calculated the interval having the maximum average number 
+of steps, as shown in the data table maxAverageSteps.
+```{r}
+dailyPattern <- activity %>%
+        na.omit(activity) %>%
+        group_by(interval) %>%
+        summarize(averageSteps = mean(steps))
+gAverage <- ggplot(dailyPattern, aes(x = interval, y = averageSteps))
+pAverage <- gAverage + geom_line() + 
+        labs(title = "Average number of steps per time interval", 
+             y = "average steps")
+print(pAverage)
+maxAverageSteps <- dailyPattern[dailyPattern$averageSteps == max(dailyPattern$averageSteps),]
+maxAverageSteps
+```
+
+#Inputing Missing Values
+##Reporting the number of missing values
+To analyse missing values, I created a logical vector for the steps variable. This shows
+that 2304 rows have NAs.
+```{r}
+##Missing values
+NAvector <- is.na(activity$steps)
+table(NAvector)
+```
+
+##Replacing missing values and creating a new dataset with the missing data filled in
+I then created a for loop in which I replaced every NA value in the steps variable with
+the value for the average steps for that interval.
+```{r}
+##This code looks up NA values in the steps variable and replaces them with 
+##average step values for the corresponding interval
+dailyPatternDF <- data.frame(dailyPattern) ##must use dailyPattern as a dataframe
+adjustedSteps <- numeric()##define a new, empty steps vector
+##For every observation (row), I check to see if it is an NA value. 
+##If it is, I replace the NA with the average number of steps for that interval.
+##If it is not, I add the original steps value.
+for(i in 1:length(NAvector)){
+        if(NAvector[i] == TRUE){
+                tempInterval <- activity$interval[i]
+                tempSteps <- dailyPatternDF[dailyPatternDF$interval == tempInterval, 2]
+        } else{
+                tempSteps <- activity$steps[i]
+        }
+        adjustedSteps <- c(adjustedSteps, tempSteps)
+        tempSteps <- numeric()
+}
+activityCleaned <- data.frame(adjustedSteps, activity[,2:3])
+```
+
+##Make a new histogram of the total number of steps taken each day with the NA values 
+##replaced
+```{r}
+activityCleanedDF <- activityCleaned %>%
+        group_by(date) %>%
+        summarize(dateSums = sum(adjustedSteps))
+g2 <- ggplot(activityCleanedDF, aes(x = dateSums))
+p2 <- g2 + geom_histogram(binwidth = 2500, fill = "white", colour = "black") +
+        labs(title = "Distribution of daily actiities, NAs removed", x = "steps per day")
+print(p2)
+mean(activityCleanedDF$dateSums)
+median(activityCleanedDF$dateSums)
+```
+
+#Difference between Weekdays and Weekends
+##Create a factor variable for weekday or weekend
+```{r}
+##Differences in activity patters between weekdays and weekends
+##Extract date information and create logical vector for weekends or not
+Day <- as.Date(activityCleaned$date)
+WeekDay <- weekdays(Day)
+WeekEnd <- WeekDay == "Saturday" | WeekDay == "Sunday"
+##Make a factor variable labeling each date as weekday or weekend
+WeekDayFactor <- factor(!WeekEnd, levels = c("TRUE","FALSE"), 
+                         labels = c("Weekday", "Weekend"))
+activityCleaned$WeekDay <- WeekDayFactor
+```
+
+##Group the data by weekday/weekend and interval, and average for all days
+```{r}
+dailyPatternCleaned <- activityCleaned %>%
+        group_by(WeekDay, interval) %>%
+        summarize(averageSteps = mean(adjustedSteps))
+```
+
+##Make the plots
+```{r}
+library(lattice)
+xyplot(averageSteps ~ interval | WeekDay, data = dailyPatternCleaned, layout = c(1,2), 
+       type = "a", ylab = "Number of steps", 
+       main = "Average number of steps per time interval")
+```
